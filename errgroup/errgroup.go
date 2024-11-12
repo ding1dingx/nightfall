@@ -9,91 +9,74 @@ import (
 	"github.com/shenghui0779/nightfall/goworker"
 )
 
-// A Group is a collection of goroutines working on subtasks that are part of
+// A group is a collection of goroutines working on subtasks that are part of
 // the same overall task.
 //
-// A zero Group is valid, has no limit on the number of active goroutines,
+// A zero group is valid, has no limit on the number of active goroutines,
 // and does not cancel on error. use WithContext instead.
-type Group struct {
-	err     error
-	wg      sync.WaitGroup
-	pool    *goworker.Pool
-	errOnce sync.Once
+type Group interface {
+	// Go calls the given function in a new goroutine.
+	//
+	// The first call to return a non-nil error cancels the group; its error will be
+	// returned by Wait.
+	Go(fn func(ctx context.Context) error)
 
-	workerOnce sync.Once
-	ch         chan func(ctx context.Context) error
-	cache      []func(ctx context.Context) error
+	// GOMAXPROCS set max goroutine to work.
+	GOMAXPROCS(int)
+
+	// Wait blocks until all function calls from the Go method have returned, then
+	// returns the first non-nil error (if any) from them.
+	Wait() error
+}
+
+type group struct {
+	initOnce sync.Once
+
+	wg      sync.WaitGroup
+	pool    goworker.Pool
+	errOnce sync.Once
+	err     error
+
+	workOnce sync.Once
+	ch       chan func(ctx context.Context) error
+	cache    []func(ctx context.Context) error
 
 	ctx    context.Context
 	cancel context.CancelCauseFunc
 }
 
-// WithContext returns a new Group with a canceled Context derived from ctx.
+// WithContext returns a new group with a canceled Context derived from ctx.
 //
 // The derived Context is canceled the first time a function passed to Go
 // returns a non-nil error or the first time Wait returns, whichever occurs first.
-func WithContext(ctx context.Context) *Group {
+func WithContext(ctx context.Context, pool goworker.Pool) Group {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	ctx, cancel := context.WithCancelCause(ctx)
-	return &Group{ctx: ctx, cancel: cancel}
-}
-
-// WithGoPool returns a new Group with a canceled Context derived from ctx.
-//
-// The derived Context is canceled the first time a function passed to Go
-// returns a non-nil error or the first time Wait returns, whichever occurs first.
-func WithGoPool(ctx context.Context, pool *gopool.Pool) *Group {
-	ctx, cancel := context.WithCancelCause(ctx)
-	return &Group{pool: pool, ctx: ctx, cancel: cancel}
-}
-
-func (g *Group) do(fn func(ctx context.Context) error) {
-	ctx := g.ctx
-	if ctx == nil {
-		ctx = context.Background()
+	if pool == nil {
+		pool = goworker.P()
 	}
-	var err error
-	defer func() {
-		if r := recover(); r != nil {
-			err = fmt.Errorf("errgroup panic recovered: %+v\n%s", r, string(debug.Stack()))
-		}
-		if err != nil {
-			g.errOnce.Do(func() {
-				g.err = err
-				if g.cancel != nil {
-					g.cancel(err)
-				}
-			})
-		}
-		g.wg.Done()
-	}()
-	err = fn(ctx)
+	ctx, cancel := context.WithCancelCause(ctx)
+	return &group{pool: pool, ctx: ctx, cancel: cancel}
 }
 
-// GOMAXPROCS set max goroutine to work.
-func (g *Group) GOMAXPROCS(n int) {
+func (g *group) GOMAXPROCS(n int) {
 	if n <= 0 {
 		return
 	}
-	g.workerOnce.Do(func() {
+	g.workOnce.Do(func() {
 		g.ch = make(chan func(context.Context) error, n)
 		for i := 0; i < n; i++ {
-			go func() {
+			g.pool.Go(g.ctx, func(ctx context.Context) {
 				for fn := range g.ch {
-					g.do(fn)
+					g.do(ctx, fn)
 				}
-			}()
+			})
 		}
 	})
 }
 
-// Go calls the given function in a new goroutine.
-//
-// The first call to return a non-nil error cancels the group; its error will be
-// returned by Wait.
-func (g *Group) Go(fn func(ctx context.Context) error) {
+func (g *group) Go(fn func(ctx context.Context) error) {
 	g.wg.Add(1)
 	if g.ch != nil {
 		select {
@@ -103,12 +86,12 @@ func (g *Group) Go(fn func(ctx context.Context) error) {
 		}
 		return
 	}
-	go g.do(fn)
+	g.pool.Go(g.ctx, func(ctx context.Context) {
+		g.do(ctx, fn)
+	})
 }
 
-// Wait blocks until all function calls from the Go method have returned, then
-// returns the first non-nil error (if any) from them.
-func (g *Group) Wait() error {
+func (g *group) Wait() error {
 	if g.ch != nil {
 		for _, fn := range g.cache {
 			g.ch <- fn
@@ -122,4 +105,24 @@ func (g *Group) Wait() error {
 		g.cancel(g.err)
 	}
 	return g.err
+}
+
+func (g *group) do(ctx context.Context, fn func(ctx context.Context) error) {
+	var err error
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("errgroup panic recovered: %+v\n%s", r, string(debug.Stack()))
+		}
+		if err != nil {
+			// fmt.Println(err)
+			g.errOnce.Do(func() {
+				g.err = err
+				if g.cancel != nil {
+					g.cancel(err)
+				}
+			})
+		}
+		g.wg.Done()
+	}()
+	err = fn(ctx)
 }

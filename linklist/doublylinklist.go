@@ -81,40 +81,8 @@ func (list *DoublyLinkList[T]) Get(index int) (T, bool) {
 	return e.value, true
 }
 
-// Remove 移除指定索引位置的元素
-func (list *DoublyLinkList[T]) Remove(index int) {
-	list.mutex.Lock()
-	defer list.mutex.Unlock()
-
-	if !list.withinRange(index) {
-		return
-	}
-
-	if list.size == 1 {
-		list.Clear()
-		return
-	}
-
-	e := list.getElement(index)
-	if e == list.first {
-		list.first = e.next
-	}
-	if e == list.last {
-		list.last = e.prev
-	}
-	if e.prev != nil {
-		e.prev.next = e.next
-	}
-	if e.next != nil {
-		e.next.prev = e.prev
-	}
-	e = nil
-
-	list.size--
-}
-
 // Pop 移除指定索引位置的元素并返回该元素的值
-func (list *DoublyLinkList[T]) Pop(index int) (T, bool) {
+func (list *DoublyLinkList[T]) Remove(index int) (T, bool) {
 	list.mutex.Lock()
 	defer list.mutex.Unlock()
 

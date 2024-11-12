@@ -3,11 +3,11 @@ package goworker
 import "time"
 
 // 协程池选项
-type Option func(*Pool)
+type Option func(*pool)
 
 // WithIdleTimeout 协程闲置超时时长，默认：60s
 func WithIdleTimeout(duration time.Duration) Option {
-	return func(p *Pool) {
+	return func(p *pool) {
 		if duration > 0 {
 			p.idleTimeout = duration
 		}
@@ -16,7 +16,7 @@ func WithIdleTimeout(duration time.Duration) Option {
 
 // WithPrefill 预填充协程数量
 func WithPrefill(n int) Option {
-	return func(p *Pool) {
+	return func(p *pool) {
 		if n > 0 {
 			p.prefill = n
 		}
@@ -25,14 +25,14 @@ func WithPrefill(n int) Option {
 
 // WithNonBlock 非阻塞模式，任务会被缓存到本地链表
 func WithNonBlock() Option {
-	return func(p *Pool) {
+	return func(p *pool) {
 		p.nonBlock = true
 	}
 }
 
 // WithQueueCap 任务队列缓冲容量，默认无缓冲
 func WithQueueCap(cap int) Option {
-	return func(p *Pool) {
+	return func(p *pool) {
 		if cap > 0 {
 			p.queueCap = cap
 		}
@@ -41,7 +41,7 @@ func WithQueueCap(cap int) Option {
 
 // WithPanicHandler 任务Panic处理方法
 func WithPanicHandler(fn PanicFn) Option {
-	return func(p *Pool) {
+	return func(p *pool) {
 		p.panicFn = fn
 	}
 }

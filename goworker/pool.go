@@ -2,6 +2,7 @@ package goworker
 
 import (
 	"context"
+	"fmt"
 	"runtime/debug"
 	"strings"
 	"sync"
@@ -17,6 +18,12 @@ const (
 	defaultIdleTimeout = 60 * time.Second
 )
 
+// Pool 协程池，控制并发协程数量，降低CPU和内存负载
+type Pool interface {
+	Go(context.Context, func(ctx context.Context))
+	Close()
+}
+
 // PanicFn 处理Panic方法
 type PanicFn func(ctx context.Context, err any, stack []byte)
 
@@ -25,17 +32,15 @@ type worker struct {
 	cancel   context.CancelFunc
 }
 
-// Job 异步执行的任务
-type Job struct {
+type task struct {
 	ctx context.Context
 	fn  func(ctx context.Context)
 }
 
-// Pool 协程池，控制并发协程数量，降低CPU和内存负载
-type Pool struct {
-	input chan *Job
-	queue chan *Job
-	cache *linklist.DoublyLinkList[*Job]
+type pool struct {
+	input chan *task
+	queue chan *task
+	cache *linklist.DoublyLinkList[*task]
 
 	capacity int
 	workers  map[string]*worker
@@ -51,16 +56,16 @@ type Pool struct {
 	cancel context.CancelFunc
 }
 
-// New 返回一个Worker实例
-func New(cap int, opts ...Option) *Pool {
+// New 生成一个新的Pool
+func New(cap int, opts ...Option) *pool {
 	if cap <= 0 {
 		cap = defaultPoolCap
 	}
 
 	ctx, cancel := context.WithCancel(context.TODO())
-	p := &Pool{
-		input: make(chan *Job),
-		cache: linklist.New[*Job](),
+	p := &pool{
+		input: make(chan *task),
+		cache: linklist.New[*task](),
 
 		capacity: cap,
 		workers:  make(map[string]*worker, cap),
@@ -74,7 +79,7 @@ func New(cap int, opts ...Option) *Pool {
 	for _, fn := range opts {
 		fn(p)
 	}
-	p.queue = make(chan *Job, p.queueCap)
+	p.queue = make(chan *task, p.queueCap)
 	// 预填充
 	if p.prefill > 0 {
 		count := p.prefill
@@ -98,24 +103,25 @@ func New(cap int, opts ...Option) *Pool {
 }
 
 // Go 异步执行任务
-func (p *Pool) Go(ctx context.Context, fn func(ctx context.Context)) {
+func (p *pool) Go(ctx context.Context, fn func(ctx context.Context)) {
 	select {
 	case <-ctx.Done():
 		return
-	case p.input <- &Job{ctx: ctx, fn: fn}:
+	case p.input <- &task{ctx: ctx, fn: fn}:
 	}
 }
 
 // Close 关闭资源
-func (p *Pool) Close() {
+func (p *pool) Close() {
 	// 销毁协程
 	p.cancel()
+	time.Sleep(time.Second)
 	// 关闭通道
 	close(p.input)
 	close(p.queue)
 }
 
-func (p *Pool) setTimeUsed(uniqId string) {
+func (p *pool) setTimeUsed(uniqId string) {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
@@ -126,14 +132,14 @@ func (p *Pool) setTimeUsed(uniqId string) {
 	v.timeUsed = time.Now()
 }
 
-func (p *Pool) run() {
+func (p *pool) run() {
 	for {
 		select {
 		case <-p.ctx.Done():
 			return
-		case job := <-p.input:
+		case t := <-p.input:
 			select {
-			case p.queue <- job:
+			case p.queue <- t:
 			default:
 				if len(p.workers) < p.capacity {
 					// 新开一个协程
@@ -149,13 +155,13 @@ func (p *Pool) run() {
 				}
 				if p.nonBlock {
 					// 非阻塞模式，放入本地缓存
-					p.cache.Append(job)
+					p.cache.Append(t)
 				} else {
 					// 阻塞模式，等待闲置协程
 					select {
 					case <-p.ctx.Done():
 						return
-					case p.queue <- job:
+					case p.queue <- t:
 					}
 				}
 			}
@@ -163,7 +169,7 @@ func (p *Pool) run() {
 	}
 }
 
-func (p *Pool) idleCheck() {
+func (p *pool) idleCheck() {
 	ticker := time.NewTicker(p.idleTimeout)
 	defer ticker.Stop()
 
@@ -184,7 +190,7 @@ func (p *Pool) idleCheck() {
 	}
 }
 
-func (p *Pool) spawn(ctx context.Context) string {
+func (p *pool) spawn(ctx context.Context) string {
 	uniqId := strings.ReplaceAll(uuid.New().String(), "-", "")
 
 	go func(ctx context.Context, uniqId string) {
@@ -197,19 +203,19 @@ func (p *Pool) spawn(ctx context.Context) string {
 			}
 		}()
 		for {
-			var job *Job
+			var t *task
 			// 获取任务
 			select {
 			case <-p.ctx.Done(): // Pool关闭，销毁
 				return
 			case <-ctx.Done(): // 闲置超时，销毁
 				return
-			case job = <-p.queue:
+			case t = <-p.queue:
 			default:
 				// 非阻塞模式，去取缓存的任务执行
 				if p.nonBlock {
-					job, _ = p.cache.Pop(0)
-					if job != nil {
+					t, _ = p.cache.Remove(0)
+					if t != nil {
 						break
 					}
 				}
@@ -219,13 +225,14 @@ func (p *Pool) spawn(ctx context.Context) string {
 					return
 				case <-ctx.Done():
 					return
-				case job = <-p.queue:
+				case t = <-p.queue:
 				}
 			}
 			// 执行任务
+			fmt.Println(uniqId)
 			p.setTimeUsed(uniqId)
-			jobCtx = job.ctx
-			job.fn(job.ctx)
+			jobCtx = t.ctx
+			t.fn(t.ctx)
 		}
 	}(ctx, uniqId)
 
@@ -233,28 +240,20 @@ func (p *Pool) spawn(ctx context.Context) string {
 }
 
 var (
-	P    *Pool
+	pp   *pool
 	once sync.Once
 )
 
 // Init 初始化默认的全局Pool
 func Init(cap int, opts ...Option) {
-	P = New(cap, opts...)
+	pp = New(cap, opts...)
 }
 
-// Go 异步执行任务
-func Go(ctx context.Context, fn func(ctx context.Context)) {
-	if P == nil {
+func P() Pool {
+	if pp == nil {
 		once.Do(func() {
-			P = New(defaultPoolCap)
+			pp = New(defaultPoolCap)
 		})
 	}
-	P.Go(ctx, fn)
-}
-
-// Close 关闭默认的全局Pool
-func Close() {
-	if P != nil {
-		P.Close()
-	}
+	return pp
 }
