@@ -115,20 +115,76 @@ func TestGet(t *testing.T) {
 
 func TestPop(t *testing.T) {
 	list := New[string]()
-	list.Append("a")
-	list.Append("b", "c")
-	v, ok := list.Pop(0)
+	list.Append("a", "b", "c")
+	v, ok := list.Remove(0)
 	assert.True(t, ok)
 	assert.Equal(t, "a", v)
 	assert.Equal(t, 2, list.Size())
-	v, ok = list.Pop(0)
+	v, ok = list.Remove(0)
 	assert.True(t, ok)
 	assert.Equal(t, "b", v)
 	assert.Equal(t, 1, list.Size())
-	v, ok = list.Pop(0)
+	v, ok = list.Remove(0)
 	assert.True(t, ok)
 	assert.Equal(t, "c", v)
 	assert.Equal(t, 0, list.Size())
+}
+
+func TestEach(t *testing.T) {
+	list := New[string]()
+	list.Append("a", "b", "c")
+	list.Each(func(index int, value string) {
+		switch index {
+		case 0:
+			if actualValue, expectedValue := value, "a"; actualValue != expectedValue {
+				t.Errorf("Got %v expected %v", actualValue, expectedValue)
+			}
+		case 1:
+			if actualValue, expectedValue := value, "b"; actualValue != expectedValue {
+				t.Errorf("Got %v expected %v", actualValue, expectedValue)
+			}
+		case 2:
+			if actualValue, expectedValue := value, "c"; actualValue != expectedValue {
+				t.Errorf("Got %v expected %v", actualValue, expectedValue)
+			}
+		default:
+			t.Errorf("Too many")
+		}
+	})
+}
+
+func TestMap(t *testing.T) {
+	list := New[string]()
+	list.Append("a", "b", "c")
+	mappedList := list.Map(func(index int, value string) string {
+		return "mapped: " + value
+	})
+	if actualValue, _ := mappedList.Get(0); actualValue != "mapped: a" {
+		t.Errorf("Got %v expected %v", actualValue, "mapped: a")
+	}
+	if actualValue, _ := mappedList.Get(1); actualValue != "mapped: b" {
+		t.Errorf("Got %v expected %v", actualValue, "mapped: b")
+	}
+	if actualValue, _ := mappedList.Get(2); actualValue != "mapped: c" {
+		t.Errorf("Got %v expected %v", actualValue, "mapped: c")
+	}
+	if mappedList.Size() != 3 {
+		t.Errorf("Got %v expected %v", mappedList.Size(), 3)
+	}
+}
+
+func TestFilter(t *testing.T) {
+	list := New[string]()
+	list.Append("a", "b", "c", "d", "e")
+	values := list.Filter(func(index int, value string) bool {
+		if value == "b" || value == "d" {
+			return true
+		}
+		return false
+	})
+	assert.Equal(t, []string{"b", "d"}, values)
+	assert.Equal(t, 3, list.Size())
+	assert.Equal(t, []string{"a", "c", "e"}, list.Values())
 }
 
 func TestSwap(t *testing.T) {
@@ -254,7 +310,7 @@ func TestString(t *testing.T) {
 	}
 }
 
-func benchmarkGet(b *testing.B, list *List[int], size int) {
+func benchmarkGet(b *testing.B, list *DoublyLinkList[int], size int) {
 	for i := 0; i < b.N; i++ {
 		for n := 0; n < size; n++ {
 			list.Get(n)
@@ -262,7 +318,7 @@ func benchmarkGet(b *testing.B, list *List[int], size int) {
 	}
 }
 
-func benchmarkAdd(b *testing.B, list *List[int], size int) {
+func benchmarkAdd(b *testing.B, list *DoublyLinkList[int], size int) {
 	for i := 0; i < b.N; i++ {
 		for n := 0; n < size; n++ {
 			list.Append(n)
@@ -270,7 +326,7 @@ func benchmarkAdd(b *testing.B, list *List[int], size int) {
 	}
 }
 
-func benchmarkRemove(b *testing.B, list *List[int], size int) {
+func benchmarkRemove(b *testing.B, list *DoublyLinkList[int], size int) {
 	for i := 0; i < b.N; i++ {
 		for n := 0; n < size; n++ {
 			list.Remove(n)

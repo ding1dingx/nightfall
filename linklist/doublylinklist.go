@@ -81,7 +81,7 @@ func (list *DoublyLinkList[T]) Get(index int) (T, bool) {
 	return e.value, true
 }
 
-// Pop 移除指定索引位置的元素并返回该元素的值
+// Remove 移除指定索引位置的元素并返回该元素的值
 func (list *DoublyLinkList[T]) Remove(index int) (T, bool) {
 	list.mutex.Lock()
 	defer list.mutex.Unlock()
@@ -93,23 +93,52 @@ func (list *DoublyLinkList[T]) Remove(index int) (T, bool) {
 
 	e := list.getElement(index)
 	value := e.value
-	if e == list.first {
-		list.first = e.next
-	}
-	if e == list.last {
-		list.last = e.prev
-	}
-	if e.prev != nil {
-		e.prev.next = e.next
-	}
-	if e.next != nil {
-		e.next.prev = e.prev
-	}
-	e = nil
-
-	list.size--
+	list.deleteElement(e)
 
 	return value, true
+}
+
+// Each 遍历操作
+func (list *DoublyLinkList[T]) Each(fn func(index int, value T)) {
+	list.mutex.RLock()
+	defer list.mutex.RUnlock()
+
+	for i, e := 0, list.first; e != nil; i, e = i+1, e.next {
+		fn(i, e.value)
+	}
+}
+
+// Map 根据指定条件，返回一个新链表
+func (list *DoublyLinkList[T]) Map(fn func(index int, value T) T) *DoublyLinkList[T] {
+	list.mutex.RLock()
+	defer list.mutex.RUnlock()
+
+	newList := &DoublyLinkList[T]{}
+	for i, e := 0, list.first; e != nil; i, e = i+1, e.next {
+		newList.Append(fn(i, e.value))
+	}
+	return newList
+}
+
+// Filter 过滤出指定条件的元素，移除它们并返回对应的值
+func (list *DoublyLinkList[T]) Filter(fn func(index int, value T) bool) []T {
+	list.mutex.Lock()
+	defer list.mutex.Unlock()
+
+	var elements []*element[T]
+	for i, e := 0, list.first; e != nil; i, e = i+1, e.next {
+		if fn(i, e.value) {
+			elements = append(elements, e)
+		}
+	}
+
+	values := make([]T, 0, len(elements))
+	for _, e := range elements {
+		values = append(values, e.value)
+		list.deleteElement(e)
+	}
+
+	return values
 }
 
 // Contains 返回链表中是否包含指定值中的一个
@@ -341,4 +370,22 @@ func (list *DoublyLinkList[T]) getElement(index int) *element[T] {
 	for i := 0; i != index; i, e = i+1, e.next {
 	}
 	return e
+}
+
+func (list *DoublyLinkList[T]) deleteElement(e *element[T]) {
+	if e == list.first {
+		list.first = e.next
+	}
+	if e == list.last {
+		list.last = e.prev
+	}
+	if e.prev != nil {
+		e.prev.next = e.next
+	}
+	if e.next != nil {
+		e.next.prev = e.prev
+	}
+	e = nil
+
+	list.size--
 }

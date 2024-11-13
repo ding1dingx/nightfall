@@ -19,7 +19,10 @@ const (
 
 // Pool 协程池，控制并发协程数量，降低CPU和内存负载
 type Pool interface {
+	// Go 异步执行任务
 	Go(context.Context, func(ctx context.Context))
+
+	// Close 关闭资源
 	Close()
 }
 
@@ -63,7 +66,7 @@ func New(cap int, opts ...Option) *pool {
 
 	ctx, cancel := context.WithCancel(context.TODO())
 	p := &pool{
-		input: make(chan *task, 1),
+		input: make(chan *task),
 		cache: linklist.New[*task](),
 
 		capacity: cap,
@@ -101,12 +104,10 @@ func New(cap int, opts ...Option) *pool {
 	return p
 }
 
-// Go 异步执行任务
 func (p *pool) Go(ctx context.Context, fn func(ctx context.Context)) {
 	p.input <- &task{ctx: ctx, fn: fn}
 }
 
-// Close 关闭资源
 func (p *pool) Close() {
 	// 销毁协程
 	p.cancel()
@@ -243,6 +244,7 @@ func Init(cap int, opts ...Option) {
 	pp = New(cap, opts...)
 }
 
+// P 返回默认的全局Pool
 func P() Pool {
 	if pp == nil {
 		once.Do(func() {
