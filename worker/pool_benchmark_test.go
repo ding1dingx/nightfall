@@ -38,6 +38,7 @@ func BenchmarkGoroutines(b *testing.B) {
 }
 
 func BenchmarkChannel(b *testing.B) {
+	runtime.GOMAXPROCS(1)
 	ctx := context.TODO()
 
 	var wg sync.WaitGroup
@@ -59,6 +60,7 @@ func BenchmarkChannel(b *testing.B) {
 }
 
 func BenchmarkErrGroup(b *testing.B) {
+	runtime.GOMAXPROCS(1)
 	ctx := context.TODO()
 
 	var wg sync.WaitGroup
@@ -80,6 +82,7 @@ func BenchmarkErrGroup(b *testing.B) {
 }
 
 func BenchmarkWorkerPool(b *testing.B) {
+	runtime.GOMAXPROCS(1)
 	ctx := context.TODO()
 
 	p := NewPool(PoolCap)
@@ -101,6 +104,7 @@ func BenchmarkWorkerPool(b *testing.B) {
 }
 
 func BenchmarkGoroutinesThroughput(b *testing.B) {
+	runtime.GOMAXPROCS(1)
 	ctx := context.TODO()
 
 	for i := 0; i < b.N; i++ {
@@ -111,6 +115,7 @@ func BenchmarkGoroutinesThroughput(b *testing.B) {
 }
 
 func BenchmarkSemaphoreThroughput(b *testing.B) {
+	runtime.GOMAXPROCS(1)
 	ctx := context.TODO()
 
 	sema := make(chan struct{}, PoolCap)
@@ -126,6 +131,7 @@ func BenchmarkSemaphoreThroughput(b *testing.B) {
 }
 
 func BenchmarkWorkerPoolThroughput(b *testing.B) {
+	runtime.GOMAXPROCS(1)
 	ctx := context.TODO()
 
 	p := NewPool(PoolCap)
