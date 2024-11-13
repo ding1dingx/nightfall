@@ -89,12 +89,7 @@ func New(cap int, opts ...Option) *pool {
 			count = p.capacity
 		}
 		for i := 0; i < count; i++ {
-			c, fn := context.WithCancel(context.TODO())
-			uniqId := p.spawn(c)
-			p.workers[uniqId] = &worker{
-				timeUsed: time.Now(),
-				cancel:   fn,
-			}
+			p.spawn()
 		}
 	}
 
@@ -139,15 +134,7 @@ func (p *pool) run() {
 			default:
 				if len(p.workers) < p.capacity {
 					// 新开一个协程
-					ctx, cancel := context.WithCancel(context.TODO())
-					uniqId := p.spawn(ctx)
-					// 存储协程信息
-					p.mutex.Lock()
-					p.workers[uniqId] = &worker{
-						timeUsed: time.Now(),
-						cancel:   cancel,
-					}
-					p.mutex.Unlock()
+					p.spawn()
 				}
 				if p.nonBlock {
 					// 非阻塞模式，放入本地缓存
@@ -186,8 +173,18 @@ func (p *pool) idleCheck() {
 	}
 }
 
-func (p *pool) spawn(ctx context.Context) string {
+func (p *pool) spawn() {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
+	ctx, cancel := context.WithCancel(context.TODO())
 	uniqId := strings.ReplaceAll(uuid.New().String(), "-", "")
+
+	// 存储协程信息
+	p.workers[uniqId] = &worker{
+		timeUsed: time.Now(),
+		cancel:   cancel,
+	}
 
 	go func(ctx context.Context, uniqId string) {
 		var taskCtx context.Context
@@ -230,8 +227,6 @@ func (p *pool) spawn(ctx context.Context) string {
 			t.fn(t.ctx)
 		}
 	}(ctx, uniqId)
-
-	return uniqId
 }
 
 var (
