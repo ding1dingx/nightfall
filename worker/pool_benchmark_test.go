@@ -1,4 +1,4 @@
-package goworker
+package worker
 
 import (
 	"context"
@@ -79,10 +79,10 @@ func BenchmarkErrGroup(b *testing.B) {
 	}
 }
 
-func BenchmarkGoPool(b *testing.B) {
+func BenchmarkWorkerPool(b *testing.B) {
 	ctx := context.TODO()
 
-	p := New(PoolCap)
+	p := NewPool(PoolCap)
 	defer p.Close()
 
 	b.ResetTimer()
@@ -125,10 +125,10 @@ func BenchmarkSemaphoreThroughput(b *testing.B) {
 	}
 }
 
-func BenchmarkGoPoolThroughput(b *testing.B) {
+func BenchmarkWorkerPoolThroughput(b *testing.B) {
 	ctx := context.TODO()
 
-	p := New(PoolCap)
+	p := NewPool(PoolCap)
 	defer p.Close()
 
 	b.ResetTimer()

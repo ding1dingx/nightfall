@@ -2,7 +2,15 @@
 
 Go协程并发控制，降低CPU和内存负载
 
-### env
+## 特点
+
+1. 实现简单
+2. 性能优秀
+3. 任务支持context
+4. 任务队列支持缓冲
+5. 非阻塞模式下，任务缓冲到全局链表
+
+## 与ants比较
 
 ```shell
 goos: darwin
@@ -10,18 +18,18 @@ goarch: amd64
 cpu: Intel(R) Core(TM) i5-1038NG7 CPU @ 2.00GHz
 ```
 
-### goworker
+### nightfall
 
 ```go
 func main() {
     ctx := context.Background()
     
-    pool := gowoker.New(5000)
+    pool := woker.NewPool(5000)
     for i := 0; i < 100000000; i++ {
         i := i
         pool.Go(ctx, func(ctx context.Context) {
             time.Sleep(time.Second)
-            fmt.Println("Hello World:", i)
+            fmt.Println("Index:", i)
         })
     }
     
@@ -48,7 +56,7 @@ func main() {
         i := i
         pool.Submit(func() {
             time.Sleep(time.Second)
-            fmt.Println("Hello World:", i)
+            fmt.Println("Index:", i)
         })
     }
     

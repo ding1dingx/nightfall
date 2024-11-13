@@ -1,13 +1,10 @@
-package goworker
+package worker
 
 import (
 	"context"
 	"runtime/debug"
-	"strings"
 	"sync"
 	"time"
-
-	"github.com/google/uuid"
 
 	"github.com/shenghui0779/nightfall/linklist"
 )
@@ -45,8 +42,7 @@ type pool struct {
 	cache *linklist.DoublyLinkList[*task]
 
 	capacity int
-	workers  map[string]*worker
-	mutex    sync.Mutex
+	workers  *linklist.DoublyLinkList[*worker]
 
 	prefill     int
 	nonBlock    bool
@@ -58,8 +54,8 @@ type pool struct {
 	cancel context.CancelFunc
 }
 
-// New 生成一个新的Pool
-func New(cap int, opts ...Option) *pool {
+// NewPool 生成一个新的Pool
+func NewPool(cap int, opts ...Option) Pool {
 	if cap <= 0 {
 		cap = defaultPoolCap
 	}
@@ -70,7 +66,7 @@ func New(cap int, opts ...Option) *pool {
 		cache: linklist.New[*task](),
 
 		capacity: cap,
-		workers:  make(map[string]*worker, cap),
+		workers:  linklist.New[*worker](),
 
 		idleTimeout: defaultIdleTimeout,
 
@@ -112,17 +108,6 @@ func (p *pool) Close() {
 	close(p.queue)
 }
 
-func (p *pool) setTimeUsed(uniqId string) {
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
-
-	v, ok := p.workers[uniqId]
-	if !ok || v == nil {
-		return
-	}
-	v.timeUsed = time.Now()
-}
-
 func (p *pool) run() {
 	for {
 		select {
@@ -132,7 +117,7 @@ func (p *pool) run() {
 			select {
 			case p.queue <- t:
 			default:
-				if len(p.workers) < p.capacity {
+				if p.workers.Size() < p.capacity {
 					// 新开一个协程
 					p.spawn()
 				}
@@ -161,32 +146,29 @@ func (p *pool) idleCheck() {
 		case <-p.ctx.Done():
 			return
 		case <-ticker.C:
-			p.mutex.Lock()
-			for k, v := range p.workers {
-				if p.idleTimeout > 0 && time.Since(v.timeUsed) > p.idleTimeout {
-					v.cancel()
-					delete(p.workers, k)
+			idles := p.workers.Filter(func(index int, value *worker) bool {
+				if time.Since(value.timeUsed) > p.idleTimeout {
+					return true
 				}
+				return false
+			})
+			for _, wk := range idles {
+				wk.cancel()
 			}
-			p.mutex.Unlock()
 		}
 	}
 }
 
 func (p *pool) spawn() {
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
-
 	ctx, cancel := context.WithCancel(context.TODO())
-	uniqId := strings.ReplaceAll(uuid.New().String(), "-", "")
-
-	// 存储协程信息
-	p.workers[uniqId] = &worker{
+	wk := &worker{
 		timeUsed: time.Now(),
 		cancel:   cancel,
 	}
+	// 存储协程信息
+	p.workers.Append(wk)
 
-	go func(ctx context.Context, uniqId string) {
+	go func(ctx context.Context, wk *worker) {
 		var taskCtx context.Context
 		defer func() {
 			if e := recover(); e != nil {
@@ -222,28 +204,28 @@ func (p *pool) spawn() {
 				}
 			}
 			// 执行任务
-			p.setTimeUsed(uniqId)
+			wk.timeUsed = time.Now()
 			taskCtx = t.ctx
 			t.fn(t.ctx)
 		}
-	}(ctx, uniqId)
+	}(ctx, wk)
 }
 
 var (
-	pp   *pool
+	pp   Pool
 	once sync.Once
 )
 
 // Init 初始化默认的全局Pool
 func Init(cap int, opts ...Option) {
-	pp = New(cap, opts...)
+	pp = NewPool(cap, opts...)
 }
 
 // P 返回默认的全局Pool
 func P() Pool {
 	if pp == nil {
 		once.Do(func() {
-			pp = New(defaultPoolCap)
+			pp = NewPool(defaultPoolCap)
 		})
 	}
 	return pp

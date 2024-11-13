@@ -6,8 +6,6 @@ import (
 	"math"
 	"testing"
 	"time"
-
-	"github.com/shenghui0779/nightfall/goworker"
 )
 
 // TestTimeWheel 测试时间轮
@@ -15,7 +13,7 @@ func TestTimeWheel(t *testing.T) {
 	ch := make(chan string)
 	defer close(ch)
 
-	tw := New(7, time.Second, goworker.P())
+	tw := New(7, time.Second, worker.P())
 	for i := 0; i < 10; i++ {
 		n := i + 1
 		addedAt := time.Now()

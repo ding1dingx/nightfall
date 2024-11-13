@@ -9,7 +9,6 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/shenghui0779/nightfall/goworker"
 	"github.com/shenghui0779/nightfall/linklist"
 )
 
@@ -43,7 +42,7 @@ type timewheel struct {
 	tick   time.Duration
 	bucket []*linklist.DoublyLinkList[*task]
 
-	pool goworker.Pool
+	pool worker.Pool
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -184,7 +183,7 @@ func (tw *timewheel) do(t *task) {
 }
 
 // New 返回一个时间轮实例
-func New(size int, tick time.Duration, pool goworker.Pool) TimeWheel {
+func New(size int, tick time.Duration, pool worker.Pool) TimeWheel {
 	ctx, cancel := context.WithCancel(context.Background())
 	tw := &timewheel{
 		size:   size,

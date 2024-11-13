@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"runtime/debug"
 	"sync"
-
-	"github.com/shenghui0779/nightfall/goworker"
 )
 
 // A group is a collection of goroutines working on subtasks that are part of
@@ -28,7 +26,7 @@ type Group interface {
 
 type group struct {
 	wg   sync.WaitGroup
-	pool goworker.Pool
+	pool worker.Pool
 
 	err  error
 	once sync.Once
@@ -41,15 +39,14 @@ type group struct {
 //
 // The derived Context is canceled the first time a function passed to Go
 // returns a non-nil error or the first time Wait returns, whichever occurs first.
-func WithContext(ctx context.Context, pool goworker.Pool) Group {
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	if pool == nil {
-		pool = goworker.P()
-	}
+func WithContext(ctx context.Context, pool worker.Pool) Group {
 	ctx, cancel := context.WithCancelCause(ctx)
-	return &group{pool: pool, ctx: ctx, cancel: cancel}
+
+	return &group{
+		pool:   pool,
+		ctx:    ctx,
+		cancel: cancel,
+	}
 }
 
 func (g *group) Go(fn func(ctx context.Context) error) {

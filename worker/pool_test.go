@@ -1,4 +1,4 @@
-package goworker
+package worker
 
 import (
 	"context"
@@ -10,7 +10,7 @@ import (
 
 func TestNormal(t *testing.T) {
 	ctx := context.Background()
-	p := New(2)
+	p := NewPool(2)
 	defer p.Close()
 	m := make(map[int]int)
 	for i := 0; i < 4; i++ {
@@ -53,7 +53,7 @@ func TestLimit(t *testing.T) {
 		t.FailNow()
 	}
 	// 限制并发数
-	p := New(2)
+	p := NewPool(2)
 	defer p.Close()
 	now = time.Now()
 	for i := 0; i < 4; i++ {
@@ -73,7 +73,7 @@ func TestLimit(t *testing.T) {
 func TestRecover(t *testing.T) {
 	ch := make(chan struct{})
 	defer close(ch)
-	p := New(2, WithPanicHandler(func(ctx context.Context, err interface{}, stack []byte) {
+	p := NewPool(2, WithPanicHandler(func(ctx context.Context, err interface{}, stack []byte) {
 		t.Log("[error] job panic:", err)
 		t.Log("[stack]", string(stack))
 		ch <- struct{}{}
