@@ -8,6 +8,8 @@ import (
 	"os"
 	"testing"
 	"time"
+
+	"github.com/shenghui0779/nightfall/worker"
 )
 
 func TestNormal(t *testing.T) {

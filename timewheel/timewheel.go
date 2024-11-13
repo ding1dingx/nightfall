@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/shenghui0779/nightfall/linklist"
+	"github.com/shenghui0779/nightfall/worker"
 )
 
 type task struct {

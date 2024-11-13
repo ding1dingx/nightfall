@@ -6,6 +6,8 @@ import (
 	"math"
 	"testing"
 	"time"
+
+	"github.com/shenghui0779/nightfall/worker"
 )
 
 // TestTimeWheel 测试时间轮

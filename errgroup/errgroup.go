@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"runtime/debug"
 	"sync"
+
+	"github.com/shenghui0779/nightfall/worker"
 )
 
 // A group is a collection of goroutines working on subtasks that are part of
