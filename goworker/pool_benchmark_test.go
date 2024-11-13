@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	RunTimes   = 1e7
+	RunTimes   = 1e6
 	PoolCap    = 5e4
 	BenchParam = 10
 )

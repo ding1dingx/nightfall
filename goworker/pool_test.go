@@ -28,7 +28,6 @@ func TestNormal(t *testing.T) {
 		wg.Done()
 	})
 	wg.Wait()
-	Close()
 	t.Log(m)
 }
 
