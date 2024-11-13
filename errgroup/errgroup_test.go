@@ -4,13 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
 	"net/http"
 	"os"
 	"testing"
 	"time"
-
-	"github.com/stretchr/testify/assert"
 
 	"github.com/shenghui0779/nightfall/goworker"
 )
@@ -38,54 +35,6 @@ func TestNormal(t *testing.T) {
 func sleep1s(context.Context) error {
 	time.Sleep(time.Second)
 	return nil
-}
-
-func TestGOMAXPROCS(t *testing.T) {
-	// 没有并发数限制
-	eg := WithContext(context.Background(), goworker.P())
-	now := time.Now()
-	eg.Go(sleep1s)
-	eg.Go(sleep1s)
-	eg.Go(sleep1s)
-	eg.Go(sleep1s)
-	err := eg.Wait()
-	assert.Nil(t, err)
-	sec := math.Round(time.Since(now).Seconds())
-	if sec != 1 {
-		t.FailNow()
-	}
-	// 限制并发数
-	eg2 := WithContext(context.Background(), goworker.P())
-	eg2.GOMAXPROCS(2)
-	now = time.Now()
-	eg2.Go(sleep1s)
-	eg2.Go(sleep1s)
-	eg2.Go(sleep1s)
-	eg2.Go(sleep1s)
-	err = eg2.Wait()
-	assert.Nil(t, err)
-	sec = math.Round(time.Since(now).Seconds())
-	if sec != 2 {
-		t.FailNow()
-	}
-	// context canceled
-	eg3 := WithContext(context.Background(), goworker.P())
-	eg3.GOMAXPROCS(2)
-	eg3.Go(func(ctx context.Context) error {
-		return errors.New("error for testing errgroup context")
-	})
-	eg3.Go(func(ctx context.Context) error {
-		time.Sleep(time.Second)
-		select {
-		case <-ctx.Done():
-			t.Log("caused by", context.Cause(ctx))
-		default:
-		}
-		return nil
-	})
-	err = eg3.Wait()
-	assert.NotNil(t, err)
-	t.Log(err)
 }
 
 func TestRecover(t *testing.T) {
@@ -198,24 +147,22 @@ func TestZeroGroup(t *testing.T) {
 		{errs: []error{err1, nil, err2}},
 	}
 
-	for i, tc := range cases {
-		var firstErr error
-
+	for _, tc := range cases {
 		eg := WithContext(context.Background(), goworker.P())
-		for j, err := range tc.errs {
-			j := j
+
+		var firstErr error
+		for i, err := range tc.errs {
 			err := err
-			eg.Go(func(context.Context) error {
-				fmt.Println(i, j, err)
-				return err
-			})
+			eg.Go(func(context.Context) error { return err })
 
 			if firstErr == nil && err != nil {
 				firstErr = err
 			}
-		}
-		if gErr := eg.Wait(); gErr != firstErr {
-			t.Errorf("after g.Go(func() error { return err }) for err in %v\n"+"g.Wait() = %v; want %v", tc.errs, gErr, firstErr)
+
+			if gErr := eg.Wait(); gErr != firstErr {
+				t.Errorf("after g.Go(func() error { return err }) for err in %v\n"+
+					"g.Wait() = %v; want %v", tc.errs[:i+1], err, firstErr)
+			}
 		}
 	}
 }

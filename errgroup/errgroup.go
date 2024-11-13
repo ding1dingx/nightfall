@@ -21,25 +21,17 @@ type Group interface {
 	// returned by Wait.
 	Go(fn func(ctx context.Context) error)
 
-	// GOMAXPROCS set max goroutine to work.
-	GOMAXPROCS(int)
-
 	// Wait blocks until all function calls from the Go method have returned, then
 	// returns the first non-nil error (if any) from them.
 	Wait() error
 }
 
 type group struct {
-	initOnce sync.Once
+	wg   sync.WaitGroup
+	pool goworker.Pool
 
-	wg      sync.WaitGroup
-	pool    goworker.Pool
-	errOnce sync.Once
-	err     error
-
-	workOnce sync.Once
-	ch       chan func(ctx context.Context) error
-	cache    []func(ctx context.Context) error
+	err  error
+	once sync.Once
 
 	ctx    context.Context
 	cancel context.CancelCauseFunc
@@ -60,69 +52,39 @@ func WithContext(ctx context.Context, pool goworker.Pool) Group {
 	return &group{pool: pool, ctx: ctx, cancel: cancel}
 }
 
-func (g *group) GOMAXPROCS(n int) {
-	if n <= 0 {
-		return
-	}
-	g.workOnce.Do(func() {
-		g.ch = make(chan func(context.Context) error, n)
-		for i := 0; i < n; i++ {
-			g.pool.Go(g.ctx, func(ctx context.Context) {
-				for fn := range g.ch {
-					g.do(ctx, fn)
-				}
-			})
-		}
-	})
-}
-
 func (g *group) Go(fn func(ctx context.Context) error) {
 	g.wg.Add(1)
-	if g.ch != nil {
-		select {
-		case g.ch <- fn:
-		default:
-			g.cache = append(g.cache, fn)
-		}
-		return
-	}
-	g.pool.Go(g.ctx, func(ctx context.Context) {
-		g.do(ctx, fn)
-	})
+	g.do(fn)
 }
 
 func (g *group) Wait() error {
-	if g.ch != nil {
-		for _, fn := range g.cache {
-			g.ch <- fn
+	defer func() {
+		if g.cancel != nil {
+			g.cancel(g.err)
 		}
-	}
+	}()
 	g.wg.Wait()
-	if g.ch != nil {
-		close(g.ch) // let all receiver exit
-	}
-	if g.cancel != nil {
-		g.cancel(g.err)
-	}
+
 	return g.err
 }
 
-func (g *group) do(ctx context.Context, fn func(ctx context.Context) error) {
-	var err error
-	defer func() {
-		if r := recover(); r != nil {
-			err = fmt.Errorf("errgroup panic recovered: %+v\n%s", r, string(debug.Stack()))
-		}
-		if err != nil {
-			// fmt.Println(err)
-			g.errOnce.Do(func() {
-				g.err = err
-				if g.cancel != nil {
-					g.cancel(err)
-				}
-			})
-		}
-		g.wg.Done()
-	}()
-	err = fn(ctx)
+func (g *group) do(fn func(ctx context.Context) error) {
+	g.pool.Go(g.ctx, func(ctx context.Context) {
+		var err error
+		defer func() {
+			if r := recover(); r != nil {
+				err = fmt.Errorf("errgroup panic recovered: %+v\n%s", r, string(debug.Stack()))
+			}
+			if err != nil {
+				g.once.Do(func() {
+					g.err = err
+					if g.cancel != nil {
+						g.cancel(err)
+					}
+				})
+			}
+			g.wg.Done()
+		}()
+		err = fn(ctx)
+	})
 }

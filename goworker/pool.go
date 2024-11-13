@@ -2,7 +2,6 @@ package goworker
 
 import (
 	"context"
-	"fmt"
 	"runtime/debug"
 	"strings"
 	"sync"
@@ -64,7 +63,7 @@ func New(cap int, opts ...Option) *pool {
 
 	ctx, cancel := context.WithCancel(context.TODO())
 	p := &pool{
-		input: make(chan *task),
+		input: make(chan *task, 1),
 		cache: linklist.New[*task](),
 
 		capacity: cap,
@@ -104,11 +103,7 @@ func New(cap int, opts ...Option) *pool {
 
 // Go 异步执行任务
 func (p *pool) Go(ctx context.Context, fn func(ctx context.Context)) {
-	select {
-	case <-ctx.Done():
-		return
-	case p.input <- &task{ctx: ctx, fn: fn}:
-	}
+	p.input <- &task{ctx: ctx, fn: fn}
 }
 
 // Close 关闭资源
@@ -194,11 +189,11 @@ func (p *pool) spawn(ctx context.Context) string {
 	uniqId := strings.ReplaceAll(uuid.New().String(), "-", "")
 
 	go func(ctx context.Context, uniqId string) {
-		var jobCtx context.Context
+		var taskCtx context.Context
 		defer func() {
 			if e := recover(); e != nil {
 				if p.panicFn != nil {
-					p.panicFn(jobCtx, e, debug.Stack())
+					p.panicFn(taskCtx, e, debug.Stack())
 				}
 			}
 		}()
@@ -229,9 +224,8 @@ func (p *pool) spawn(ctx context.Context) string {
 				}
 			}
 			// 执行任务
-			fmt.Println(uniqId)
 			p.setTimeUsed(uniqId)
-			jobCtx = t.ctx
+			taskCtx = t.ctx
 			t.fn(t.ctx)
 		}
 	}(ctx, uniqId)
