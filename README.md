@@ -16,7 +16,7 @@ cpu: Intel(R) Core(TM) i5-1038NG7 CPU @ 2.00GHz
 func main() {
     ctx := context.Background()
     
-    pool := gopool.New(5000)
+    pool := gowoker.New(5000)
     for i := 0; i < 100000000; i++ {
         i := i
         pool.Go(ctx, func(ctx context.Context) {
