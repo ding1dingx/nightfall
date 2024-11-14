@@ -11,25 +11,20 @@ import (
 
 func TestNew(t *testing.T) {
 	list1 := New[int]()
-
 	if actualValue := list1.Empty(); actualValue != true {
 		t.Errorf("Got %v expected %v", actualValue, true)
 	}
 
 	list2 := New[int](1, 2)
-
 	if actualValue := list2.Size(); actualValue != 2 {
 		t.Errorf("Got %v expected %v", actualValue, 2)
 	}
-
 	if actualValue, ok := list2.Get(0); actualValue != 1 || !ok {
 		t.Errorf("Got %v expected %v", actualValue, 1)
 	}
-
 	if actualValue, ok := list2.Get(1); actualValue != 2 || !ok {
 		t.Errorf("Got %v expected %v", actualValue, 2)
 	}
-
 	if actualValue, ok := list2.Get(2); actualValue != 0 || ok {
 		t.Errorf("Got %v expected %v", actualValue, 0)
 	}
@@ -72,25 +67,6 @@ func TestAppendAndPrepend(t *testing.T) {
 	}
 }
 
-func TestRemove(t *testing.T) {
-	list := New[string]()
-	list.Append("a")
-	list.Append("b", "c")
-	list.Remove(2)
-	if actualValue, ok := list.Get(2); actualValue != "" || ok {
-		t.Errorf("Got %v expected %v", actualValue, "")
-	}
-	list.Remove(1)
-	list.Remove(0)
-	list.Remove(0) // no effect
-	if actualValue := list.Empty(); actualValue != true {
-		t.Errorf("Got %v expected %v", actualValue, true)
-	}
-	if actualValue := list.Size(); actualValue != 0 {
-		t.Errorf("Got %v expected %v", actualValue, 0)
-	}
-}
-
 func TestGet(t *testing.T) {
 	list := New[string]()
 	list.Append("a")
@@ -110,6 +86,25 @@ func TestGet(t *testing.T) {
 	list.Remove(0)
 	if actualValue, ok := list.Get(0); actualValue != "b" || !ok {
 		t.Errorf("Got %v expected %v", actualValue, "b")
+	}
+}
+
+func TestRemove(t *testing.T) {
+	list := New[string]()
+	list.Append("a")
+	list.Append("b", "c")
+	list.Remove(2)
+	if actualValue, ok := list.Get(2); actualValue != "" || ok {
+		t.Errorf("Got %v expected %v", actualValue, "")
+	}
+	list.Remove(1)
+	list.Remove(0)
+	list.Remove(0) // no effect
+	if actualValue := list.Empty(); actualValue != true {
+		t.Errorf("Got %v expected %v", actualValue, true)
+	}
+	if actualValue := list.Size(); actualValue != 0 {
+		t.Errorf("Got %v expected %v", actualValue, 0)
 	}
 }
 

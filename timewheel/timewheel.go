@@ -88,8 +88,6 @@ func (tw *timewheel) requeue(t *task) {
 	select {
 	case <-tw.ctx.Done(): // 时间轮已停止
 		return
-	case <-t.ctx.Done(): // 任务被取消
-		return
 	default:
 	}
 
@@ -109,7 +107,7 @@ func (tw *timewheel) requeue(t *task) {
 	if slot == tw.slot {
 		if t.round == 0 {
 			t.remainder = delay
-			go tw.do(t)
+			tw.do(t)
 			return
 		}
 		t.round--
