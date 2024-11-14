@@ -10,6 +10,12 @@ Go协程并发控制，降低CPU和内存负载
 4. 任务支持缓冲队列
 5. 非阻塞模式下，任务缓存到全局链表
 
+## 安装
+
+```shell
+go get -u github.com/shenghui0779/nightfall
+```
+
 ## 与ants比较
 
 ```shell
