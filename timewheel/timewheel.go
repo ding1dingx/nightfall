@@ -185,7 +185,7 @@ func (tw *timewheel) do(t *task) {
 
 // New 返回一个时间轮实例
 func New(size int, tick time.Duration, pool worker.Pool) TimeWheel {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(context.TODO())
 	tw := &timewheel{
 		size:   size,
 		tick:   tick,
