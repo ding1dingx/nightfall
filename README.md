@@ -18,9 +18,9 @@ goarch: amd64
 cpu: Intel(R) Core(TM) i5-1038NG7 CPU @ 2.00GHz
 ```
 
-### example_1
+### 1. example-1
 
-#### nightfall
+#### 👉 nightfall
 
 ```go
 func main() {
@@ -47,7 +47,7 @@ func main() {
 
 ![nightfall_mem_1.png](example/nightfall_mem_1.png)
 
-### ants
+#### 👉 ants
 
 ```go
 func main() {
@@ -74,9 +74,9 @@ func main() {
 
 ![ants_mem_1.png](example/ants_mem_1.png)
 
-### example_2
+### 2. example-2
 
-#### nightfall
+#### 👉 nightfall
 
 ```go
 func main() {
@@ -108,7 +108,7 @@ func main() {
 
 ![nightfall_mem_2.png](example/nightfall_mem_2.png)
 
-#### ants
+#### 👉 ants
 
 ```go
 func main() {
