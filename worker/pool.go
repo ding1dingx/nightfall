@@ -63,7 +63,6 @@ func NewPool(cap int, opts ...Option) Pool {
 	ctx, cancel := context.WithCancel(context.TODO())
 	p := &pool{
 		input: make(chan *task),
-		cache: linklist.New[*task](),
 
 		capacity: cap,
 		workers:  linklist.New[*worker](),
@@ -78,6 +77,9 @@ func NewPool(cap int, opts ...Option) Pool {
 		fn(p)
 	}
 	p.queue = make(chan *task, p.queueCap)
+	if p.nonBlock {
+		p.cache = linklist.New[*task]()
+	}
 	// 预填充
 	if p.prefill > 0 {
 		count := p.prefill
