@@ -22,7 +22,7 @@ go get -u github.com/shenghui0779/nightfall
 
 ![flowchart.jpg](example/flowchart.jpg)
 
-## 与ants比较
+## 效果
 
 ```shell
 goos: darwin
