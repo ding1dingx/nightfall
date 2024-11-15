@@ -7,14 +7,19 @@ Go协程并发控制并复用，降低CPU和内存负载
 1. 实现简单
 2. 性能优异
 3. 任务支持context
-4. 任务支持缓冲队列
-5. 非阻塞模式下，任务缓存到全局链表
+4. 任务队列支持缓冲
+5. 非阻塞模式下，任务缓冲到全局链表
+6. 附带 errgroup 和 timewheel
 
 ## 安装
 
 ```shell
 go get -u github.com/shenghui0779/nightfall
 ```
+
+## 流程图
+
+![flowchart.jpg](example/flowchart.jpg)
 
 ## 与ants比较
 
