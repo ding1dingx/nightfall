@@ -77,6 +77,7 @@ func NewPool(cap int, opts ...Option) Pool {
 		fn(p)
 	}
 	p.queue = make(chan *task, p.queueCap)
+	// 非阻塞模式，初始化缓存链表
 	if p.nonBlock {
 		p.cache = linklist.New[*task]()
 	}
@@ -92,7 +93,7 @@ func NewPool(cap int, opts ...Option) Pool {
 	}
 
 	go p.run()
-	go p.idleCheck()
+	go p.idle()
 
 	return p
 }
@@ -119,27 +120,29 @@ func (p *pool) run() {
 			select {
 			case p.queue <- t:
 			default:
+				// 未达上限，新开一个协程
 				if p.workers.Size() < p.capacity {
-					// 新开一个协程
 					p.spawn()
+					p.queue <- t
+					break
 				}
+				// 非阻塞模式，放入本地缓存
 				if p.nonBlock {
-					// 非阻塞模式，放入本地缓存
 					p.cache.Append(t)
-				} else {
-					// 阻塞模式，等待闲置协程
-					select {
-					case <-p.ctx.Done():
-						return
-					case p.queue <- t:
-					}
+					break
+				}
+				// 阻塞模式，等待闲置协程
+				select {
+				case <-p.ctx.Done():
+					return
+				case p.queue <- t:
 				}
 			}
 		}
 	}
 }
 
-func (p *pool) idleCheck() {
+func (p *pool) idle() {
 	ticker := time.NewTicker(p.idleTimeout)
 	defer ticker.Stop()
 
@@ -187,16 +190,16 @@ func (p *pool) spawn() {
 				return
 			case <-ctx.Done(): // 闲置超时，销毁
 				return
-			case t = <-p.queue:
+			case t = <-p.queue: // 尝试从队列获取任务
 			default:
 				// 非阻塞模式，去取缓存的任务执行
 				if p.nonBlock {
-					t, _ = p.cache.Remove(0)
-					if t != nil {
+					if v, ok := p.cache.Remove(0); ok && v != nil {
+						t = v
 						break
 					}
 				}
-				// 阻塞模式或未取到缓存任务，则等待新任务
+				// 未取到任务，则等待新任务
 				select {
 				case <-p.ctx.Done():
 					return
