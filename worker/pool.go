@@ -14,7 +14,7 @@ const (
 	defaultIdleTimeout = 60 * time.Second
 )
 
-// Pool 协程池，控制并发协程数量，降低CPU和内存负载
+// Pool 协程并发复用，降低CPU和内存负载
 type Pool interface {
 	// Go 异步执行任务
 	Go(context.Context, func(ctx context.Context))
