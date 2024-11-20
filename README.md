@@ -30,7 +30,7 @@ goarch: amd64
 cpu: Intel(R) Core(TM) i5-1038NG7 CPU @ 2.00GHz
 ```
 
-### 1. 场景-1
+### 场景-1
 
 #### 👉 nightfall
 
@@ -86,7 +86,7 @@ func main() {
 
 ![ants_mem_1.png](example/ants_mem_1.png)
 
-### 2. 场景-2
+### 场景-2
 
 #### 👉 nightfall
 
