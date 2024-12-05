@@ -17,7 +17,7 @@ const (
 // Pool 协程并发复用，降低CPU和内存负载
 type Pool interface {
 	// Go 异步执行任务
-	Go(context.Context, func(ctx context.Context))
+	Go(ctx context.Context, fn func(ctx context.Context))
 
 	// Close 关闭资源
 	Close()
@@ -152,10 +152,7 @@ func (p *pool) idle() {
 			return
 		case <-ticker.C:
 			idles := p.workers.Filter(func(index int, value *worker) bool {
-				if time.Since(value.timeUsed) > p.idleTimeout {
-					return true
-				}
-				return false
+				return time.Since(value.timeUsed) > p.idleTimeout
 			})
 			for _, wk := range idles {
 				wk.cancel()

@@ -2,7 +2,6 @@ package timewheel
 
 import (
 	"context"
-	"fmt"
 	"runtime/debug"
 	"strings"
 	"time"
@@ -13,28 +12,36 @@ import (
 	"github.com/shenghui0779/nightfall/worker"
 )
 
+type (
+	// TaskFn 任务方法
+	TaskFn func(ctx context.Context, taskId string, attempts int64) bool
+
+	// PanicFn 处理Panic方法
+	PanicFn func(ctx context.Context, taskId string, err any, stack []byte)
+)
+
 type task struct {
-	ctx         context.Context
-	id          string                                         // 任务ID
-	attempts    uint16                                         // 当前尝试的次数
-	maxAttempts uint16                                         // 最大尝试次数
-	round       int                                            // 延迟执行的轮数
-	remainder   time.Duration                                  // 任务执行前的剩余延迟（小于时间轮精度）
-	deferFn     func(attempts uint16) time.Duration            // 返回任务下一次延迟执行的时间
-	callback    func(ctx context.Context, taskID string) error // 任务回调函数
+	id string // 任务ID
+
+	callback TaskFn        // 任务执行函数
+	delay    time.Duration // 延迟执行时间
+
+	round     int           // 延迟执行的轮数
+	remainder time.Duration // 任务执行前的剩余延迟（小于时间轮精度）
+
+	attempts int64 // 当前任务执行的次数
+
+	ctx context.Context
 }
 
 // TimeWheel 单时间轮
 type TimeWheel interface {
-	// Go 异步一个任务并返回任务ID，到期被执行，默认仅执行一次；若指定了重试次数，则在返回`error`后重试；
+	// Go 异步一个任务并返回任务ID，到期被执行，返回`true`则会重复执行；
 	// 注意：任务是异步执行的，`ctx`一旦被取消，则任务也随之取消；如要保证任务不被取消，请使用`context.WithoutCancel`
-	Go(ctx context.Context, fn func(ctx context.Context, taskId string) error, options ...Option) string
+	Go(ctx context.Context, taskFn TaskFn, delay time.Duration) string
 
 	// Stop 终止时间轮
 	Stop()
-
-	// Err 监听异常错误
-	Err() <-chan error
 }
 
 type timewheel struct {
@@ -48,29 +55,19 @@ type timewheel struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	err chan error
+	panicFn PanicFn // Panic处理函数
 }
 
-func (tw *timewheel) Go(ctx context.Context, fn func(ctx context.Context, taskId string) error, options ...Option) string {
+func (tw *timewheel) Go(ctx context.Context, taskFn TaskFn, delay time.Duration) string {
 	id := strings.ReplaceAll(uuid.New().String(), "-", "")
 	t := &task{
-		ctx:         ctx,
-		id:          id,
-		callback:    fn,
-		maxAttempts: 1,
-		deferFn: func(attempts uint16) time.Duration {
-			return 0
-		},
-	}
-	for _, f := range options {
-		f(t)
+		id:       id,
+		callback: taskFn,
+		delay:    delay,
+		ctx:      ctx,
 	}
 	tw.requeue(t)
 	return id
-}
-
-func (tw *timewheel) Err() <-chan error {
-	return tw.err
 }
 
 func (tw *timewheel) Stop() {
@@ -79,9 +76,7 @@ func (tw *timewheel) Stop() {
 		return
 	default:
 	}
-
 	tw.cancel()
-	close(tw.err)
 }
 
 func (tw *timewheel) requeue(t *task) {
@@ -91,22 +86,17 @@ func (tw *timewheel) requeue(t *task) {
 	default:
 	}
 
-	// 任务已达到最大尝试次数
-	if t.attempts >= t.maxAttempts {
-		return
-	}
 	t.attempts++
 
 	tick := tw.tick.Nanoseconds()
-	delay := t.deferFn(t.attempts)
-	duration := delay.Nanoseconds()
+	duration := t.delay.Nanoseconds()
 	// 圈数
 	t.round = int(duration / (tick * int64(tw.size)))
 	// 槽位
 	slot := (int(duration/tick)%tw.size + tw.slot) % tw.size
 	if slot == tw.slot {
 		if t.round == 0 {
-			t.remainder = delay
+			t.remainder = t.delay
 			tw.do(t)
 			return
 		}
@@ -149,11 +139,9 @@ func (tw *timewheel) process(slot int) {
 func (tw *timewheel) do(t *task) {
 	tw.pool.Go(tw.ctx, func(ctx context.Context) {
 		defer func() {
-			if r := recover(); r != nil {
-				err := fmt.Errorf("t(%s) panic recovered: %+v\n%s", t.id, r, string(debug.Stack()))
-				select {
-				case tw.err <- err:
-				default:
+			if rerr := recover(); rerr != nil {
+				if tw.panicFn != nil {
+					tw.panicFn(t.ctx, t.id, rerr, debug.Stack())
 				}
 			}
 		}()
@@ -163,26 +151,21 @@ func (tw *timewheel) do(t *task) {
 		}
 
 		select {
-		case <-ctx.Done():
+		case <-ctx.Done(): // 时间轮停止
 			return
 		case <-t.ctx.Done(): // 任务被取消
-			err := fmt.Errorf("t(%s) canceled: %w", t.id, context.Cause(t.ctx))
-			select {
-			case tw.err <- err:
-			default:
-			}
 			return
 		default:
 		}
 
-		if err := t.callback(t.ctx, t.id); err != nil {
+		if t.callback(t.ctx, t.id, t.attempts) {
 			tw.requeue(t)
 		}
 	})
 }
 
 // New 返回一个时间轮实例
-func New(size int, tick time.Duration, pool worker.Pool) TimeWheel {
+func New(size int, tick time.Duration, pool worker.Pool, opts ...Option) TimeWheel {
 	ctx, cancel := context.WithCancel(context.TODO())
 	tw := &timewheel{
 		size:   size,
@@ -193,8 +176,9 @@ func New(size int, tick time.Duration, pool worker.Pool) TimeWheel {
 
 		ctx:    ctx,
 		cancel: cancel,
-
-		err: make(chan error),
+	}
+	for _, fn := range opts {
+		fn(tw)
 	}
 	for i := 0; i < size; i++ {
 		tw.bucket[i] = linklist.New[*task]()
