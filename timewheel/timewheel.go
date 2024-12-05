@@ -13,8 +13,8 @@ import (
 )
 
 type (
-	// TaskFn 任务方法
-	TaskFn func(ctx context.Context, taskId string, attempts int64) bool
+	// TaskFn 任务方法，返回下一次执行的延迟时间，若返回0，则表示不再执行
+	TaskFn func(ctx context.Context, taskId string, attempts int64) time.Duration
 
 	// PanicFn 处理Panic方法
 	PanicFn func(ctx context.Context, taskId string, err any, stack []byte)
@@ -23,21 +23,20 @@ type (
 type task struct {
 	id string // 任务ID
 
-	callback TaskFn        // 任务执行函数
-	delay    time.Duration // 延迟执行时间
+	callback TaskFn // 任务执行函数
+	attempts int64  // 当前任务执行的次数
 
 	round     int           // 延迟执行的轮数
 	remainder time.Duration // 任务执行前的剩余延迟（小于时间轮精度）
-
-	attempts int64 // 当前任务执行的次数
 
 	ctx context.Context
 }
 
 // TimeWheel 单时间轮
 type TimeWheel interface {
-	// Go 异步一个任务并返回任务ID，到期被执行，返回`true`则会重复执行；
-	// 注意：任务是异步执行的，`ctx`一旦被取消，则任务也随之取消；如要保证任务不被取消，请使用`context.WithoutCancel`
+	// Go 异步一个任务并返回任务ID；
+	// 注意：任务是异步执行的，`ctx`一旦被取消，则任务也随之取消；
+	// 如要保证任务不被取消，请使用`context.WithoutCancel`
 	Go(ctx context.Context, taskFn TaskFn, delay time.Duration) string
 
 	// Stop 终止时间轮
@@ -63,10 +62,9 @@ func (tw *timewheel) Go(ctx context.Context, taskFn TaskFn, delay time.Duration)
 	t := &task{
 		id:       id,
 		callback: taskFn,
-		delay:    delay,
 		ctx:      ctx,
 	}
-	tw.requeue(t)
+	tw.requeue(t, delay)
 	return id
 }
 
@@ -79,7 +77,7 @@ func (tw *timewheel) Stop() {
 	tw.cancel()
 }
 
-func (tw *timewheel) requeue(t *task) {
+func (tw *timewheel) requeue(t *task, delay time.Duration) {
 	select {
 	case <-tw.ctx.Done(): // 时间轮已停止
 		return
@@ -89,14 +87,14 @@ func (tw *timewheel) requeue(t *task) {
 	t.attempts++
 
 	tick := tw.tick.Nanoseconds()
-	duration := t.delay.Nanoseconds()
+	duration := delay.Nanoseconds()
 	// 圈数
 	t.round = int(duration / (tick * int64(tw.size)))
 	// 槽位
 	slot := (int(duration/tick)%tw.size + tw.slot) % tw.size
 	if slot == tw.slot {
 		if t.round == 0 {
-			t.remainder = t.delay
+			t.remainder = delay
 			tw.do(t)
 			return
 		}
@@ -158,8 +156,9 @@ func (tw *timewheel) do(t *task) {
 		default:
 		}
 
-		if t.callback(t.ctx, t.id, t.attempts) {
-			tw.requeue(t)
+		delay := t.callback(t.ctx, t.id, t.attempts)
+		if delay != 0 {
+			tw.requeue(t, delay)
 		}
 	})
 }

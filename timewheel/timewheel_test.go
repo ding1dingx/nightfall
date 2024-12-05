@@ -21,15 +21,24 @@ func TestTimeWheel(t *testing.T) {
 
 	addedAt := time.Now()
 
-	tw.Go(ctx, func(ctx context.Context, taskId string, attempts int64) bool {
+	tw.Go(ctx, func(ctx context.Context, taskId string, attempts int64) time.Duration {
 		ch <- fmt.Sprintf("task[%s][%d] run after %ds", taskId, attempts, int64(math.Round(time.Since(addedAt).Seconds())))
-		return attempts < 10
-	}, time.Second*time.Duration(1))
+		if attempts >= 10 {
+			return 0
+		}
+		if attempts%2 == 0 {
+			return time.Second * 2
+		}
+		return time.Second
+	}, time.Second)
 
-	tw.Go(ctx, func(ctx context.Context, taskId string, attempts int64) bool {
+	tw.Go(ctx, func(ctx context.Context, taskId string, attempts int64) time.Duration {
 		ch <- fmt.Sprintf("task[%s][%d] run after %ds", taskId, attempts, int64(math.Round(time.Since(addedAt).Seconds())))
-		return attempts < 5
-	}, time.Second*time.Duration(2))
+		if attempts >= 5 {
+			return 0
+		}
+		return time.Second * 2
+	}, time.Second*2)
 
 	for i := 0; i < 15; i++ {
 		t.Log(<-ch)
