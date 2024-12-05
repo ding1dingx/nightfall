@@ -44,3 +44,24 @@ func TestTimeWheel(t *testing.T) {
 		t.Log(<-ch)
 	}
 }
+
+// TestPanic 测试Panic
+func TestPanic(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+
+	tw := New(7, time.Second, worker.P(), WithPanicFn(func(ctx context.Context, taskId string, err any, stack []byte) {
+		fmt.Println("[task]", taskId)
+		fmt.Println("[error]", err)
+		fmt.Println("[stack]", string(stack))
+		cancel()
+	}))
+
+	addedAt := time.Now()
+
+	tw.Go(ctx, func(ctx context.Context, taskId string, attempts int64) time.Duration {
+		fmt.Println("task run after", time.Since(addedAt).String())
+		panic("oh no!")
+	}, time.Second)
+
+	<-ctx.Done()
+}
