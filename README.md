@@ -1,5 +1,10 @@
 # nightfall
 
+[![golang](https://img.shields.io/badge/Language-Go-green.svg?style=flat)](https://golang.org)
+[![GitHub release](https://img.shields.io/github/release/yiigo/nightfall.svg)](https://github.com/yiigo/nightfall/releases/latest)
+[![pkg.go.dev](https://img.shields.io/badge/dev-reference-007d9c?logo=go&logoColor=white&style=flat)](https://pkg.go.dev/github.com/yiigo/nightfall)
+[![Apache 2.0 license](http://img.shields.io/badge/license-Apache%202.0-brightgreen.svg)](http://opensource.org/licenses/apache2.0)
+
 Go协程并发复用，降低CPU和内存负载
 
 ## 特点
@@ -15,7 +20,7 @@ Go协程并发复用，降低CPU和内存负载
 ## 安装
 
 ```shell
-go get -u github.com/shenghui0779/nightfall
+go get -u github.com/yiigo/nightfall
 ```
 
 ## 流程图
@@ -37,7 +42,7 @@ cpu: Intel(R) Core(TM) i5-1038NG7 CPU @ 2.00GHz
 ```go
 func main() {
     ctx := context.Background()
-    
+
     pool := woker.NewPool(5000)
     for i := 0; i < 100000000; i++ {
         i := i
@@ -46,7 +51,7 @@ func main() {
             fmt.Println("Index:", i)
         })
     }
-    
+
     <-ctx.Done()
 }
 ```
@@ -64,7 +69,7 @@ func main() {
 ```go
 func main() {
     ctx := context.Background()
-    
+
     pool, _ := ants.NewPool(5000)
     for i := 0; i < 100000000; i++ {
         i := i
@@ -73,7 +78,7 @@ func main() {
             fmt.Println("Index:", i)
         })
     }
-    
+
     <-ctx.Done()
 }
 ```
@@ -93,7 +98,7 @@ func main() {
 ```go
 func main() {
     ctx := context.Background()
-    
+
     pool := woker.NewPool(5000)
     for i := 0; i < 100; i++ {
         i := i
@@ -107,7 +112,7 @@ func main() {
             }
         })
     }
-    
+
     <-ctx.Done()
 }
 ```
@@ -125,7 +130,7 @@ func main() {
 ```go
 func main() {
     ctx := context.Background()
-    
+
     pool, _ := ants.NewPool(5000)
     for i := 0; i < 100; i++ {
         i := i
@@ -139,7 +144,7 @@ func main() {
             }
         })
     }
-    
+
     <-ctx.Done()
 }
 ```
