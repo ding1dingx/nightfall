@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/shenghui0779/nightfall/worker"
+	"github.com/yiigo/nightfall/worker"
 )
 
 // TestTimeWheel 测试时间轮

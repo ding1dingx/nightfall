@@ -1,4 +1,4 @@
-module github.com/shenghui0779/nightfall
+module github.com/yiigo/nightfall
 
 go 1.22.0
 

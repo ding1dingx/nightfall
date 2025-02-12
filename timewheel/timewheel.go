@@ -8,8 +8,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/shenghui0779/nightfall/linklist"
-	"github.com/shenghui0779/nightfall/worker"
+	"github.com/yiigo/nightfall/internal/linklist"
+	"github.com/yiigo/nightfall/worker"
 )
 
 type (

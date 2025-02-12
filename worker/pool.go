@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/shenghui0779/nightfall/linklist"
+	"github.com/yiigo/nightfall/internal/linklist"
 )
 
 const (
